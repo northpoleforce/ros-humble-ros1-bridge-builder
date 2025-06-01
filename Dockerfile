@@ -42,32 +42,38 @@ SHELL ["/bin/bash", "-o", "pipefail", "-o", "errexit", "-c"]
 ###########################
 # 1.) Bring system up to the latest ROS desktop configuration
 ###########################
-RUN apt-get -y update
-RUN apt-get -y upgrade
-RUN apt-get -y install ros-humble-desktop
 
+RUN mv /etc/apt/sources.list.d/ros2-latest.list /etc/apt/sources.list.d/ros2-latest.list.bak && \
+    apt-get -y update && \
+    apt-get -y install curl gnupg && \
+    curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | gpg --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg && \
+    sh -c 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] https://mirrors.huaweicloud.com/ros2/ubuntu $(lsb_release -sc) main" > /etc/apt/sources.list.d/ros2-latest.list' && \
+    apt-get -y update && \
+    apt-get -y install ros-humble-desktop
+	
 ###########################
 # 2.) Temporarily remove ROS2 apt repository
 ###########################
-RUN mv /etc/apt/sources.list.d/ros2-latest.list /root/
-RUN apt-get update
+
+RUN mv /etc/apt/sources.list.d/ros2-latest.list /root/ && \
+    apt-get update
 
 ###########################
 # 3.) comment out the catkin conflict
 ###########################
-RUN sed  -i -e 's|^Conflicts: catkin|#Conflicts: catkin|' /var/lib/dpkg/status
-RUN apt-get install -f
+RUN sed  -i -e 's|^Conflicts: catkin|#Conflicts: catkin|' /var/lib/dpkg/status && \
+    apt-get install -f
 
 ###########################
 # 4.) force install these packages
 ###########################
-RUN apt-get download python3-catkin-pkg
-RUN apt-get download python3-rospkg
-RUN apt-get download python3-rosdistro
-RUN dpkg --force-overwrite -i python3-catkin-pkg*.deb
-RUN dpkg --force-overwrite -i python3-rospkg*.deb
-RUN dpkg --force-overwrite -i python3-rosdistro*.deb
-RUN apt-get install -f
+RUN apt-get download python3-catkin-pkg && \
+    apt-get download python3-rospkg && \
+    apt-get download python3-rosdistro && \
+    dpkg --force-overwrite -i python3-catkin-pkg*.deb && \
+    dpkg --force-overwrite -i python3-rospkg*.deb && \
+    dpkg --force-overwrite -i python3-rosdistro*.deb && \
+    apt-get install -f
 
 ###########################
 # 5.) Install the latest ROS1 desktop configuration
