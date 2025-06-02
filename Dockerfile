@@ -204,12 +204,18 @@ RUN                                                                             
       --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 ###########################
-# 8.) Clean up
+# 8.) Clean up and source
 ###########################
-RUN apt-get -y clean all;
+RUN apt-get -y clean all
 
-#############################
-# 9.) Set up the entrypoint
-#     and default command
-#############################
-ENTRYPOINT []
+# 创建简单的入口点
+RUN echo '#!/bin/bash' > /ros_entrypoint.sh && \
+    echo 'set -e' >> /ros_entrypoint.sh && \
+    echo 'source /opt/ros/humble/setup.bash' >> /ros_entrypoint.sh && \
+    echo 'source /ros2_ws/install/setup.bash' >> /ros_entrypoint.sh && \
+    echo 'exec "$@"' >> /ros_entrypoint.sh && \
+    chmod +x /ros_entrypoint.sh
+
+WORKDIR /ros2_ws
+ENTRYPOINT ["/ros_entrypoint.sh"]
+CMD ["/bin/bash"]
