@@ -1,80 +1,40 @@
-FROM ros:humble-ros-base-jammy
-# The above base image is multi-platform (works on ARM64 and AMD64):
-# Docker will automatically select the correct platform variant based on the host's architecture.
+###########################
+# 1.) Bring system up to the latest ROS desktop configuration
+###########################
 
-#
-# How to build this docker image:
-#  docker build . -t ros-humble-ros1-bridge-builder --network host
-#
-# How to build ros-humble-ros1-bridge:
-#  # 0.) From a Ubuntu 22.04 (Jammy) ROS 2 Humble system, create a "ros-humble-ros1-bridge/" ROS2 package:
-#    docker run --network host --rm ros-humble-ros1-bridge-builder | tar xvzf -
-#
-# How to use the ros-humble-ros1-bridge:
-#  # 1.) First start a ROS1 Noetic docker and bring up a GUI terminal, something like:
-#    rocker --x11 --user --privileged --persist-image \
-#         --volume /dev/shm /dev/shm --network=host -- ros:noetic-ros-base-focal \
-#         'bash -c "sudo apt update; sudo apt install -y ros-noetic-rospy-tutorials tilix; tilix"'
-#
-#  # 2.) Then, start "roscore" inside the ROS1 container:
-#    source /opt/ros/noetic/setup.bash
-#    roscore
-#
-#  # 3.) Now, from the Ubuntu 22.04 (Jammy) ROS2 Desktop Humble system, start the ros1 bridge node:
-#    apt-get -y install ros-humble-desktop
-#    source /opt/ros/humble/setup.bash
-#    source ros-humble-ros1-bridge/install/local_setup.bash
-#    ros2 run ros1_bridge dynamic_bridge
-#
-#  # 4.) Back to the ROS1 Noetic container, run in another terminal tab:
-#    source /opt/ros/noetic/setup.bash
-#    rosrun rospy_tutorials talker
-#
-#  # 5.) Finally, from the Ubuntu 22.04 (Jammy) ROS2 Humble system:
-#    source /opt/ros/humble/setup.bash
-#    ros2 run demo_nodes_cpp listener
-#
+FROM osrf/ros:humble-desktop-full-jammy
 
 # Make sure bash catches errors (no need to chain commands with &&, use ; instead)
 SHELL ["/bin/bash", "-o", "pipefail", "-o", "errexit", "-c"]
 
-
-###########################
-# 1.) Bring system up to the latest ROS desktop configuration
-###########################
-RUN apt-get -y update
-RUN apt-get -y upgrade
-RUN apt-get -y install ros-humble-desktop
-
 ###########################
 # 2.) Temporarily remove ROS2 apt repository
 ###########################
-RUN mv /etc/apt/sources.list.d/ros2.sources /root/
-RUN apt-get update
+
+RUN rm /etc/apt/sources.list.d/ros2-latest.list; \
+    apt-get update
 
 ###########################
 # 3.) comment out the catkin conflict
 ###########################
-RUN sed  -i -e 's|^Conflicts: catkin|#Conflicts: catkin|' /var/lib/dpkg/status
-RUN apt-get install -f
+RUN sed  -i -e 's|^Conflicts: catkin|#Conflicts: catkin|' /var/lib/dpkg/status && \
+    apt-get install -f
 
 ###########################
 # 4.) force install these packages
-###########################
-RUN apt-get download python3-catkin-pkg
-RUN apt-get download python3-rospkg
-RUN apt-get download python3-rosdistro
-RUN dpkg --force-overwrite -i python3-catkin-pkg*.deb
-RUN dpkg --force-overwrite -i python3-rospkg*.deb
-RUN dpkg --force-overwrite -i python3-rosdistro*.deb
-RUN apt-get install -f
-
-###########################
 # 5.) Install the latest ROS1 desktop configuration
 # see https://packages.ubuntu.com/jammy/ros-desktop-dev
 # note: ros-desktop-dev automatically includes tf tf2
 ###########################
-RUN apt-get -y install ros-desktop-dev
+RUN apt-get download python3-catkin-pkg; \
+    apt-get download python3-rospkg; \
+    apt-get download python3-rosdistro; \
+    dpkg --force-overwrite -i python3-catkin-pkg*.deb; \
+    dpkg --force-overwrite -i python3-rospkg*.deb; \
+    dpkg --force-overwrite -i python3-rosdistro*.deb; \
+    apt-get install -f; \
+    \
+    apt-get -y install ros-desktop-dev
 
 # fix ARM64 pkgconfig path issue -- Fix provided by ambrosekwok
 RUN if [[ $(uname -m) = "arm64" || $(uname -m) = "aarch64" ]]; then                     \
@@ -86,26 +46,25 @@ RUN if [[ $(uname -m) = "arm64" || $(uname -m) = "aarch64" ]]; then             
 #   For example, to include ROS tutorial message types, pass
 #   "--build-arg ADD_ros_tutorials=1" to the docker build command.
 ###########################
-RUN mv /root/ros2.sources /etc/apt/sources.list.d/
-RUN apt-get -y update
+RUN apt-get -y install curl gnupg; \
+	curl -s https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | gpg --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg; \
+	sh -c 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] https://mirrors.huaweicloud.com/ros2/ubuntu $(lsb_release -sc) main" > /etc/apt/sources.list.d/ros2-latest.list'; \
+	apt-get -y update
 
 # for ros-humble-example-interfaces:
 ARG ADD_ros_tutorials=1
-
 # for ros-humble-grid-map:
 ARG ADD_grid_map=0
-
 # for a custom message example
 ARG ADD_example_custom_msgs=0
-
 # for octomap
 ARG ADD_octomap_msgs=0
 
 # sanity check:
-RUN echo "ADD_ros_tutorials         = '$ADD_ros_tutorials'"
-RUN echo "ADD_grid_map              = '$ADD_grid_map'"
-RUN echo "ADD_example_custom_msgs   = '$ADD_example_custom_msgs'"
-RUN echo "ADD_octomap_msgs          = '$ADD_octomap_msgs'"
+RUN echo "ADD_ros_tutorials         = '$ADD_ros_tutorials'"; \
+echo "ADD_grid_map              = '$ADD_grid_map'"; \
+echo "ADD_example_custom_msgs   = '$ADD_example_custom_msgs'"; \
+echo "ADD_octomap_msgs          = '$ADD_octomap_msgs'";
 
 ###########################
 # 6.1) Add ROS1 ros_tutorials messages and services
@@ -117,14 +76,6 @@ RUN if [[ "$ADD_ros_tutorials" = "1" ]]; then                                   
       unset ROS_DISTRO;                                                                 \
       time colcon build --cmake-args -DCMAKE_BUILD_TYPE=Release;                        \
     fi
-
-# unit test (optional)
-# RUN if [[ "$ADD_ros_tutorials" = "1" ]]; then           \
-#       cd ros_tutorials;                                 \
-#       unset ROS_DISTRO;                                 \
-#       colcon test --event-handlers console_direct+;     \
-#       colcon test-result;                               \
-#     fi
 
 ###########################
 # 6.2 Add ROS1 grid-map messages
@@ -241,11 +192,10 @@ RUN                                                                             
     #-------------------------------------                                                      \
     # Finally, build the Bridge                                                                 \
     #-------------------------------------                                                      \
-    mkdir -p /ros-humble-ros1-bridge/src;                                                       \
-    cd /ros-humble-ros1-bridge/src;                                                             \
-    git clone -b action_bridge_humble --depth=1 https://github.com/smith-doug/ros1_bridge.git;  \
-    cd ros1_bridge/;                                                                            \
-    cd ../..;                                                                                   \
+    mkdir -p /ros2_ws/src;                                                       				\
+    cd /ros2_ws/src;                                                             				\
+    git clone https://github.com/ros2/ros1_bridge.git;  										\
+    cd ..;                                                                                   	\
     MEMG=$(printf "%.0f" $(free -g | awk '/^Mem:/{print $2}'));                                 \
     NPROC=$(nproc);  MIN=$((MEMG<NPROC ? MEMG : NPROC));                                        \
     #                                                                                           \
@@ -254,41 +204,18 @@ RUN                                                                             
       --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 ###########################
-# 8.) Clean up
+# 8.) Clean up and source
 ###########################
-RUN apt-get -y clean all; apt-get -y update
+RUN apt-get -y clean all
 
-###########################
-# 9.) Pack all ROS1 dependent libraries
-###########################
-# fix ARM64 pkgconfig path issue -- Fix provided by ambrosekwok
-RUN if [[ $(uname -m) = "arm64" || $(uname -m) = "aarch64" ]]; then                    \
-      cp /usr/lib/x86_64-linux-gnu/pkgconfig/* /usr/lib/aarch64-linux-gnu/pkgconfig/;  \
-    fi
+# 创建简单的入口点
+RUN echo '#!/bin/bash' > /ros_entrypoint.sh && \
+    echo 'set -e' >> /ros_entrypoint.sh && \
+    echo 'source /opt/ros/humble/setup.bash' >> /ros_entrypoint.sh && \
+    echo 'source /ros2_ws/install/setup.bash' >> /ros_entrypoint.sh && \
+    echo 'exec "$@"' >> /ros_entrypoint.sh && \
+    chmod +x /ros_entrypoint.sh
 
-RUN ROS1_LIBS="libxmlrpcpp.so";                                                 \
-     ROS1_LIBS="$ROS1_LIBS librostime.so";                                      \
-     ROS1_LIBS="$ROS1_LIBS libroscpp.so";                                       \
-     ROS1_LIBS="$ROS1_LIBS libroscpp_serialization.so";                         \
-     ROS1_LIBS="$ROS1_LIBS librosconsole.so";                                   \
-     ROS1_LIBS="$ROS1_LIBS librosconsole_log4cxx.so";                           \
-     ROS1_LIBS="$ROS1_LIBS librosconsole_backend_interface.so";                 \
-     ROS1_LIBS="$ROS1_LIBS liblog4cxx.so";                                      \
-     ROS1_LIBS="$ROS1_LIBS libcpp_common.so";                                   \
-     ROS1_LIBS="$ROS1_LIBS libb64.so";                                          \
-     ROS1_LIBS="$ROS1_LIBS libaprutil-1.so";                                    \
-     ROS1_LIBS="$ROS1_LIBS libapr-1.so";                                        \
-     ROS1_LIBS="$ROS1_LIBS libactionlib.so.1d";                                 \
-     cd /ros-humble-ros1-bridge/install/ros1_bridge/lib;                        \
-     for soFile in $ROS1_LIBS; do                                               \
-       soFilePath=$(ldd libros1_bridge.so | grep $soFile | awk '{print $3;}');  \
-       cp $soFilePath ./;                                                       \
-     done
-
-###########################
-# 10.) Spit out ros1_bridge tarball by default when no command is given
-###########################
-RUN tar czf /ros-humble-ros1-bridge.tgz \
-     --exclude '*/build/*' --exclude '*/src/*' /ros-humble-ros1-bridge
-ENTRYPOINT []
-CMD cat /ros-humble-ros1-bridge.tgz; sync
+WORKDIR /ros2_ws
+ENTRYPOINT ["/ros_entrypoint.sh"]
+CMD ["/bin/bash"]
