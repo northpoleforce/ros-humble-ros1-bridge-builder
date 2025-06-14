@@ -2,7 +2,7 @@
 # 1.) Bring system up to the latest ROS desktop configuration
 ###########################
 
-FROM osrf/ros:humble-desktop-full-jammy
+FROM ros:humble-perception-jammy
 
 # Make sure bash catches errors (no need to chain commands with &&, use ; instead)
 SHELL ["/bin/bash", "-o", "pipefail", "-o", "errexit", "-c"]
