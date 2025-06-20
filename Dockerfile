@@ -43,6 +43,23 @@ SHELL ["/bin/bash", "-o", "pipefail", "-o", "errexit", "-c"]
 # 1.) Bring system up to the latest ROS desktop configuration
 ###########################
 
+RUN cat > /etc/apt/sources.list <<EOF
+deb https://mirrors.aliyun.com/ubuntu-ports/ jammy main restricted universe multiverse
+deb-src https://mirrors.aliyun.com/ubuntu-ports/ jammy main restricted universe multiverse
+
+deb https://mirrors.aliyun.com/ubuntu-ports/ jammy-security main restricted universe multiverse
+deb-src https://mirrors.aliyun.com/ubuntu-ports/ jammy-security main restricted universe multiverse
+
+deb https://mirrors.aliyun.com/ubuntu-ports/ jammy-updates main restricted universe multiverse
+deb-src https://mirrors.aliyun.com/ubuntu-ports/ jammy-updates main restricted universe multiverse
+
+# deb https://mirrors.aliyun.com/ubuntu-ports/ jammy-proposed main restricted universe multiverse
+# deb-src https://mirrors.aliyun.com/ubuntu-ports/ jammy-proposed main restricted universe multiverse
+
+deb https://mirrors.aliyun.com/ubuntu-ports/ jammy-backports main restricted universe multiverse
+deb-src https://mirrors.aliyun.com/ubuntu-ports/ jammy-backports main restricted universe multiverse
+EOF
+
 RUN mv /etc/apt/sources.list.d/ros2-latest.list /etc/apt/sources.list.d/ros2-latest.list.bak && \
     apt-get -y update && \
     apt-get -y install curl gnupg && \
@@ -92,8 +109,10 @@ RUN if [[ $(uname -m) = "arm64" || $(uname -m) = "aarch64" ]]; then             
 #   For example, to include ROS tutorial message types, pass
 #   "--build-arg ADD_ros_tutorials=1" to the docker build command.
 ###########################
-RUN mv /root/ros2-latest.list /etc/apt/sources.list.d/
-RUN apt-get -y update
+RUN mv /root/ros2-latest.list /etc/apt/sources.list.d/ && \
+	apt-get -y update && \
+	git config --global http.proxy http://192.168.6.107:7897 && \
+    git config --global https.proxy http://192.168.6.107:7897
 
 # for ros-humble-example-interfaces:
 ARG ADD_ros_tutorials=1
